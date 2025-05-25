@@ -17,6 +17,8 @@ from ctc_forced_aligner import (
 )
 from deepmultilingualpunctuation import PunctuationModel
 from nemo.collections.asr.models.msdd_models import NeuralDiarizer
+from nemo.collections.asr.models import EncDecSpeakerLabelModel
+
 
 from helpers import (
     cleanup,
@@ -31,6 +33,7 @@ from helpers import (
     punct_model_langs,
     whisper_langs,
     write_srt,
+    create_speaker_embeddings_manifest,
 )
 
 mtypes = {"cpu": "int8", "cuda": "float16"}
@@ -89,6 +92,14 @@ parser.add_argument(
     help="if you have a GPU use 'cuda', otherwise 'cpu'",
 )
 
+parser.add_argument(
+    "--voices-dir",
+    type=str,
+    dest="voices_dir",
+    default=None,
+    help="Path to the directory containing the voices",
+)
+
 args = parser.parse_args()
 language = process_language_arg(args.language, args.model_name)
 
@@ -114,6 +125,43 @@ if args.stemming:
         )
 else:
     vocal_target = args.audio
+
+ROOT = os.getcwd() # delete nx
+temp_path = os.path.join(ROOT, "temp_outputs")
+
+
+
+
+
+voices_embeddings_manifest = create_speaker_embeddings_manifest(args.voices_dir, temp_path)
+print(voices_embeddings_manifest)
+
+speaker_model = EncDecSpeakerLabelModel.from_pretrained("titanet_large")
+a, b, c, d = speaker_model.batch_inference(
+    voices_embeddings_manifest, 32, 16000, device=args.device)
+
+
+print(a)
+print(b)
+print(c)
+print(d)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+os._exit(0)
+
 
 
 # Transcribe the audio file
@@ -252,10 +300,17 @@ else:
 wsm = get_realigned_ws_mapping_with_punctuation(wsm)
 ssm = get_sentences_speaker_mapping(wsm, speaker_ts)
 
+# If voices directory is provided, use it to identify the speakers
+ssmi = []
+if (args.voices_dir != None and args.voices_dir != ""):
+    ssmi = ssm
+else:
+    ssmi = ssm
+
 with open(f"{os.path.splitext(args.audio)[0]}.txt", "w", encoding="utf-8-sig") as f:
-    get_speaker_aware_transcript(ssm, f)
+    get_speaker_aware_transcript(ssmi, f)
 
 with open(f"{os.path.splitext(args.audio)[0]}.srt", "w", encoding="utf-8-sig") as srt:
-    write_srt(ssm, srt)
+    write_srt(ssmi, srt)
 
 cleanup(temp_path)

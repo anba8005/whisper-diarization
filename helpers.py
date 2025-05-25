@@ -4,7 +4,7 @@ import shutil
 
 import nltk
 import wget
-
+from pydub import AudioSegment
 from omegaconf import OmegaConf
 
 punct_model_langs = [
@@ -608,3 +608,27 @@ def process_language_arg(language: str, model_name: str):
             )
 
     return language
+
+def create_speaker_embeddings_manifest(voices_dir: str, output_dir: str):
+    speakers = os.listdir(voices_dir)
+
+    manifest = []
+    for speaker in speakers:
+        for file in os.listdir(os.path.join(voices_dir, speaker)):
+            if file.endswith(".wav"):
+                filepath = os.path.join(voices_dir, speaker, file)
+                duration = AudioSegment.from_file(filepath).duration_seconds
+                manifest.append(
+                    {"audio_filepath": filepath, 
+                     "label": speaker, "offset": 0, "duration": duration})
+
+    data_dir = os.path.join(output_dir, "identify")
+    os.makedirs(data_dir, exist_ok=True)
+
+    manifest_path = os.path.join(data_dir, "voices_embeddings_manifest.json")
+    with open(manifest_path, "w") as f:
+        for line in manifest:
+            json.dump(line, f)
+            f.write("\n")
+
+    return manifest_path
